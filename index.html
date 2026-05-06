@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistem Inventaris Interaktif</title>
+    <title>Sistem Inventaris Batch</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #f4f4f4; }
         table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 20px; }
         th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
         th { background: #333; color: white; }
-        .controls { display: flex; gap: 10px; align-items: center; }
-        input[type="number"] { width: 60px; padding: 5px; }
-        button { cursor: pointer; border: none; padding: 8px 12px; color: white; border-radius: 4px; }
+        .sticky-tools { position: sticky; top: 0; background: #eee; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; gap: 10px; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        input[type="number"] { width: 80px; padding: 5px; }
+        button { cursor: pointer; border: none; padding: 10px 20px; color: white; border-radius: 4px; font-weight: bold; }
         .btn-depo { background: #27ae60; }
         .btn-with { background: #c0392b; }
         .loading { color: orange; font-weight: bold; }
@@ -19,69 +19,75 @@
 </head>
 <body>
 
-    <h2>DATABASE INVENTARIS</h2>
-    <div id="status">Memuat data...</div>
+    <h2>DATABASE INVENTARIS (BATCH MODE)</h2>
     
+    <div class="sticky-tools">
+        <button class="btn-depo" onclick="submitBatch('deposit')">DEPOSIT SEMUA</button>
+        <button class="btn-with" onclick="submitBatch('withdraw')">WITHDRAW SEMUA</button>
+        <div id="status">Memuat data...</div>
+    </div>
+
     <table id="inventoryTable">
         <thead>
             <tr>
                 <th>Nama Barang</th>
                 <th>Kode</th>
-                <th>Stok</th>
-                <th>Aksi</th>
+                <th>Stok Saat Ini</th>
+                <th>Jumlah Input</th>
             </tr>
         </thead>
-        <tbody id="tableBody">
-            <!-- Data akan muncul di sini secara otomatis -->
-        </tbody>
+        <tbody id="tableBody"></tbody>
     </table>
 
     <script>
-        // GANTI URL DI BAWAH INI DENGAN URL WEB APP YANG ANDA SIMPAN TADI
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxHIdL4iIk9nFyCPOUt4JXcp8A9RCOV3elt-EO5n1GlQ4OXTzIgD-TC3lSqocd2uU05mw/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbziBd051J_ZwY5TNsKlYuCHB6LYaKOW8KWQawdBm7DbnAy2t703WEjskaIZ5M-ls2QurA/exec"; // Masukkan URL Deploy baru Anda di sini
+        let itemCodes = [];
 
         async function loadData() {
             const response = await fetch(SCRIPT_URL);
             const data = await response.json();
             const tableBody = document.getElementById('tableBody');
             tableBody.innerHTML = '';
+            itemCodes = [];
             
-            // Mulai dari baris ke-2 (index 1) untuk melewati header
             for (let i = 1; i < data.length; i++) {
+                const kode = data[i][1];
+                itemCodes.push(kode);
                 const row = `<tr>
                     <td>${data[i][3]}</td>
-                    <td>${data[i][1]}</td>
-                    <td id="stok-${data[i][1]}">${data[i][4]}</td>
-                    <td>
-                        <div class="controls">
-                            <input type="number" id="input-${data[i][1]}" value="1" min="1">
-                            <button class="btn-depo" onclick="updateStok('${data[i][1]}', 'deposit')">Deposit</button>
-                            <button class="btn-with" onclick="updateStok('${data[i][1]}', 'withdraw')">Withdraw</button>
-                        </div>
-                    </td>
+                    <td>${kode}</td>
+                    <td><b>${data[i][4]}</b></td>
+                    <td><input type="number" id="input-${kode}" placeholder="0" min="0"></td>
                 </tr>`;
                 tableBody.innerHTML += row;
             }
-            document.getElementById('status').innerText = "Data Terkini";
+            document.getElementById('status').innerText = "Data Siap";
         }
 
-        async function updateStok(kode, aksi) {
-            const jumlah = document.getElementById(`input-${kode}`).value;
-            const statusDiv = document.getElementById('status');
+        async function submitBatch(aksi) {
+            const itemsToProcess = [];
             
-            statusDiv.className = 'loading';
-            statusDiv.innerText = "Sedang memproses...";
+            itemCodes.forEach(kode => {
+                const val = document.getElementById(`input-${kode}`).value;
+                if (val && parseInt(val) > 0) {
+                    itemsToProcess.push({ kode: kode, jumlah: parseInt(val) });
+                }
+            });
 
+            if (itemsToProcess.length === 0) return alert("Isi minimal satu jumlah barang!");
+
+            document.getElementById('status').innerText = "Sedang Memproses " + itemsToProcess.length + " item...";
+            
             try {
                 const response = await fetch(SCRIPT_URL, {
                     method: 'POST',
-                    body: JSON.stringify({ kode: kode, jumlah: jumlah, aksi: aksi })
+                    body: JSON.stringify({ aksi: aksi, items: itemsToProcess })
                 });
                 const result = await response.text();
                 alert(result);
-                loadData(); // Refresh data setelah update
+                loadData(); 
             } catch (error) {
-                alert("Terjadi kesalahan koneksi");
+                alert("Gagal koneksi ke database");
             }
         }
 
